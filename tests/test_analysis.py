@@ -96,3 +96,13 @@ def test_market_research_full(make_item):
     assert locations["US"] == 3
     assert report["seller_feedback"]["samples"] == 4
     assert report["observations"]
+
+
+def test_find_deals_lists_unknown_shipping_for_manual_check(make_item):
+    items = [make_item(item_id=f"v1|{p}|0", price=p, shipping=0.0) for p in (100, 100, 100, 100)]
+    items.append(make_item(item_id="v1|cheap|0", price=50.0, shipping=None))
+    items.append(make_item(item_id="v1|pricey|0", price=99.0, shipping=None))
+    out = analysis.find_deals(items, threshold=0.2)
+    manual = [d["item_id"] for d in out["check_shipping_manually"]]
+    assert manual == ["v1|cheap|0"]
+    assert all(d["item"]["item_id"] != "v1|cheap|0" for d in out["deals"])

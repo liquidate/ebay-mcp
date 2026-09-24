@@ -79,9 +79,11 @@ class Item:
 
     ``price`` is the listed item price; ``shipping_cost`` is the lowest-cost
     shipping option to the buyer when eBay reports one (``None`` means the cost is
-    unknown -- e.g. calculated shipping or local pickup). :attr:`total_cost`
-    combines the two and is the figure a buyer actually pays, which is what the
-    deal/market analysis works from.
+    unknown -- e.g. calculated shipping with no delivery postal code configured,
+    or local pickup). :attr:`total_cost` combines the two and is the figure a
+    buyer actually pays, which is what the deal/market analysis works from. When
+    shipping is unknown, ``total_cost`` is ``None`` rather than the bare item
+    price, so an unpriced shipping charge can't make a listing look cheaper.
     """
 
     item_id: str
@@ -103,6 +105,7 @@ class Item:
     short_description: str | None = None
     returns_accepted: bool | None = None
     return_period_days: int | None = None
+    return_shipping_paid_by: str | None = None
     available_quantity: int | None = None
 
     @classmethod
@@ -141,9 +144,11 @@ class Item:
             returns_accepted=returns.get("returnsAccepted"),
             return_period_days=(
                 int(period["value"])
-                if period.get("unit") == "DAY" and str(period.get("value", "")).isdigit()
+                if str(period.get("unit", "")).endswith("DAY")
+                and str(period.get("value", "")).isdigit()
                 else None
             ),
+            return_shipping_paid_by=returns.get("returnShippingCostPayer"),
             available_quantity=quantity if isinstance(quantity, int) else None,
         )
 
@@ -151,10 +156,9 @@ class Item:
     def total_cost(self) -> float | None:
         """Item price plus known shipping, in the item's currency."""
 
-        if self.price is None:
+        if self.price is None or self.shipping_cost is None:
             return None
-        shipping = self.shipping_cost.value if self.shipping_cost else 0.0
-        return round(self.price.value + shipping, 2)
+        return round(self.price.value + self.shipping_cost.value, 2)
 
     @property
     def currency(self) -> str | None:
@@ -168,6 +172,7 @@ class Item:
             "shipping_cost": self.shipping_cost.to_dict() if self.shipping_cost else None,
             "free_shipping": self.free_shipping,
             "total_cost": self.total_cost,
+            "shipping_known": self.shipping_cost is not None,
             "currency": self.currency,
             "condition": self.condition,
             "buying_options": list(self.buying_options),
@@ -182,6 +187,7 @@ class Item:
             "short_description": self.short_description,
             "returns_accepted": self.returns_accepted,
             "return_period_days": self.return_period_days,
+            "return_shipping_paid_by": self.return_shipping_paid_by,
             "available_quantity": self.available_quantity,
         }
         # Search summaries carry none of these; only add the block when present.

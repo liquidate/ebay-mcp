@@ -138,6 +138,25 @@ def find_deals(
         )
 
     deals.sort(key=lambda d: d["discount"], reverse=True)
+
+    # Listings whose shipping eBay didn't price have no total, so they can't be
+    # ranked. If the item price alone clears the cutoff, surface them separately
+    # for a manual look instead of dropping them.
+    check_shipping = [
+        {
+            "item_price": item.price.value,
+            "item_id": item.item_id,
+            "title": item.title,
+            "item_web_url": item.item_web_url,
+        }
+        for item in items
+        if item.price is not None
+        and item.price.currency == currency
+        and item.shipping_cost is None
+        and item.price.value <= cutoff
+    ]
+    check_shipping.sort(key=lambda d: d["item_price"])
+
     return {
         "currency": currency,
         "reference_median": round(median, 2),
@@ -145,6 +164,7 @@ def find_deals(
         "excluded": excluded,
         "deal_count": len(deals),
         "deals": deals[:limit],
+        "check_shipping_manually": check_shipping[:limit],
     }
 
 
@@ -247,8 +267,7 @@ def _observations(
 
     top_condition, top_count = conditions.most_common(1)[0]
     notes.append(
-        f"Most common condition is {top_condition} "
-        f"({top_count} of {len(items)} listings)."
+        f"Most common condition is {top_condition} ({top_count} of {len(items)} listings)."
     )
 
     if free_shipping:

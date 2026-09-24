@@ -124,7 +124,8 @@ def test_item_details_parsed_from_get_item():
             "shortDescription": "power adapter included",
             "returnTerms": {
                 "returnsAccepted": True,
-                "returnPeriod": {"value": 30, "unit": "DAY"},
+                "returnPeriod": {"value": 30, "unit": "CALENDAR_DAY"},
+                "returnShippingCostPayer": "SELLER",
             },
             "estimatedAvailabilities": [{"estimatedAvailableQuantity": 3}],
         }
@@ -134,6 +135,7 @@ def test_item_details_parsed_from_get_item():
     assert details["short_description"] == "power adapter included"
     assert details["returns_accepted"] is True
     assert details["return_period_days"] == 30
+    assert details["return_shipping_paid_by"] == "SELLER"
     assert details["available_quantity"] == 3
 
 
@@ -142,3 +144,32 @@ def test_item_no_returns_and_summary_has_no_details_block():
     assert no_returns.to_dict()["details"]["returns_accepted"] is False
     summary = Item.from_api({"itemId": "v1|9|0", "title": "x"})
     assert "details" not in summary.to_dict()
+
+
+def test_unknown_shipping_means_unknown_total():
+    item = Item.from_api({"itemId": "v1|10|0", "price": {"value": "499.99", "currency": "USD"}})
+    assert item.total_cost is None
+    out = item.to_dict()
+    assert out["shipping_known"] is False
+    assert out["free_shipping"] is False
+
+
+def test_calculated_shipping_added_to_total():
+    item = Item.from_api(
+        {
+            "itemId": "v1|11|0",
+            "price": {"value": "499.99", "currency": "USD"},
+            "shippingOptions": [
+                {
+                    "shippingCostType": "CALCULATED",
+                    "shippingCost": {"value": "39.43", "currency": "USD"},
+                },
+                {
+                    "shippingCostType": "CALCULATED",
+                    "shippingCost": {"value": "193.79", "currency": "USD"},
+                },
+            ],
+        }
+    )
+    assert item.total_cost == 539.42
+    assert item.to_dict()["shipping_known"] is True

@@ -184,7 +184,6 @@ def test_search_buying_options_filter(config):
     asyncio.run(run())
 
 
-
 def test_buy_it_now_only_drops_auction_hybrids(config):
     listings = [
         {**ITEM_JSON, "itemId": "v1|1|0", "buyingOptions": ["FIXED_PRICE"]},
