@@ -109,3 +109,36 @@ def test_search_result_parsing():
     assert result.total == 1234
     assert len(result.items) == 2
     assert result.to_dict()["returned"] == 2
+
+
+def test_item_details_parsed_from_get_item():
+    item = Item.from_api(
+        {
+            "itemId": "v1|7|0",
+            "title": "OptiPlex",
+            "price": {"value": "499.99", "currency": "USD"},
+            "localizedAspects": [
+                {"type": "STRING", "name": "RAM Size", "value": "16 GB"},
+                {"type": "STRING", "name": "Features", "value": "Built-in Wi-Fi Adapter"},
+            ],
+            "shortDescription": "power adapter included",
+            "returnTerms": {
+                "returnsAccepted": True,
+                "returnPeriod": {"value": 30, "unit": "DAY"},
+            },
+            "estimatedAvailabilities": [{"estimatedAvailableQuantity": 3}],
+        }
+    )
+    details = item.to_dict()["details"]
+    assert details["aspects"] == {"RAM Size": "16 GB", "Features": "Built-in Wi-Fi Adapter"}
+    assert details["short_description"] == "power adapter included"
+    assert details["returns_accepted"] is True
+    assert details["return_period_days"] == 30
+    assert details["available_quantity"] == 3
+
+
+def test_item_no_returns_and_summary_has_no_details_block():
+    no_returns = Item.from_api({"itemId": "v1|8|0", "returnTerms": {"returnsAccepted": False}})
+    assert no_returns.to_dict()["details"]["returns_accepted"] is False
+    summary = Item.from_api({"itemId": "v1|9|0", "title": "x"})
+    assert "details" not in summary.to_dict()

@@ -45,10 +45,17 @@ The code is layered so the analysis is testable without the network:
 | `analyze_prices` | Price distribution for a query: min/max, mean, median, p25/p75/p90, stdev. |
 | `find_deals` | Listings priced at least *N%* below the market median, ranked by discount. |
 | `market_research` | Full overview: price stats, condition mix, price-by-condition, shipping, seller locations, observations. |
-| `get_item_details` | Full details for a single listing by item id. |
+| `get_item_details` | Full details for a single listing: item specifics (e.g. RAM, storage, Wi-Fi), short description, return policy, quantity available. |
 
 All prices are isolated to a single currency and, unless noted, reflect total
 cost (item + shipping).
+
+**Buy It Now only by default.** The four search tools take `buy_it_now_only`
+(default `true`), and the CLI `search` / `research` commands take
+`--include-auctions` to turn it off. eBay's `FIXED_PRICE` filter still returns
+auctions that carry a Buy It Now option (that option disappears once someone
+bids), so those are dropped as well. Buy It Now listings that also accept Best
+Offer are kept.
 
 ## Setup
 
@@ -78,6 +85,7 @@ Requires Python 3.10+ and an eBay developer account.
    ebay-mcp check
    ebay-mcp search "nintendo switch oled" --limit 5
    ebay-mcp research "airpods pro 2"
+   ebay-mcp item "v1|123456789|0"
    ```
 
 ## Connecting to Claude
@@ -122,6 +130,10 @@ runs offline and needs no credentials.
   scope here; "market" statistics are therefore over current asking prices.
 - The client-credentials token grants access to public search only — no
   user-specific or order data.
+- Item specifics come from what the seller filled in. They are usually right on
+  hardware basics but can be wrong (e.g. "Maximum RAM Capacity"); confirm
+  anything that matters on the listing page.
+- `total` in search results is eBay's count before auction hybrids are dropped.
 - eBay rate limits the Browse API (default ~5,000 calls/day); the analysis tools
   spend one call each.
 

@@ -97,12 +97,23 @@ class Item:
     item_location_country: str | None
     image_url: str | None
     categories: tuple[str, ...]
+    # Detail-only fields: eBay returns these from ``getItem`` but not from search
+    # summaries, so they stay empty/None for search results.
+    aspects: tuple[tuple[str, str], ...] = ()
+    short_description: str | None = None
+    returns_accepted: bool | None = None
+    return_period_days: int | None = None
+    available_quantity: int | None = None
 
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> Item:
         shipping_cost, free_shipping = _parse_shipping(data.get("shippingOptions"))
         image = data.get("image") or {}
         thumbs = data.get("thumbnailImages") or [{}]
+        returns = data.get("returnTerms") or {}
+        period = returns.get("returnPeriod") or {}
+        availability = (data.get("estimatedAvailabilities") or [{}])[0] or {}
+        quantity = availability.get("estimatedAvailableQuantity")
         return cls(
             item_id=data.get("itemId", ""),
             title=data.get("title", ""),
@@ -121,6 +132,19 @@ class Item:
                 for c in (data.get("categories") or [])
                 if c.get("categoryName")
             ),
+            aspects=tuple(
+                (a["name"], str(a.get("value", "")))
+                for a in (data.get("localizedAspects") or [])
+                if a.get("name")
+            ),
+            short_description=data.get("shortDescription"),
+            returns_accepted=returns.get("returnsAccepted"),
+            return_period_days=(
+                int(period["value"])
+                if period.get("unit") == "DAY" and str(period.get("value", "")).isdigit()
+                else None
+            ),
+            available_quantity=quantity if isinstance(quantity, int) else None,
         )
 
     @property
@@ -137,7 +161,7 @@ class Item:
         return self.price.currency if self.price else None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out: dict[str, Any] = {
             "item_id": self.item_id,
             "title": self.title,
             "price": self.price.to_dict() if self.price else None,
@@ -153,6 +177,17 @@ class Item:
             "item_web_url": self.item_web_url,
             "image_url": self.image_url,
         }
+        details = {
+            "aspects": dict(self.aspects),
+            "short_description": self.short_description,
+            "returns_accepted": self.returns_accepted,
+            "return_period_days": self.return_period_days,
+            "available_quantity": self.available_quantity,
+        }
+        # Search summaries carry none of these; only add the block when present.
+        if any(v not in (None, {}) for v in details.values()):
+            out["details"] = details
+        return out
 
 
 def _parse_shipping(options: list[dict[str, Any]] | None) -> tuple[Money | None, bool]:

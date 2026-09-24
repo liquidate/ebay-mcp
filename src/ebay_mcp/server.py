@@ -68,7 +68,10 @@ def build_server(config: Config | None = None, client: EbayClient | None = None)
             "`market_research` for a full overview (price spread, condition mix, "
             "shipping, seller signals), and `get_item_details` for one listing. "
             "All tools return JSON. Prices reflect total cost (item + shipping) "
-            "unless noted, and are isolated to a single currency."
+            "unless noted, and are isolated to a single currency. Search tools "
+            "return Buy It Now listings only unless `buy_it_now_only` is false. "
+            "`get_item_details` includes the listing's item specifics (e.g. RAM, "
+            "storage, Wi-Fi), return policy, and quantity available."
         ),
     )
 
@@ -81,13 +84,15 @@ def build_server(config: Config | None = None, client: EbayClient | None = None)
         min_price: float | None = None,
         max_price: float | None = None,
         free_shipping_only: bool = False,
+        buy_it_now_only: bool = True,
     ) -> str:
         """Search active eBay listings.
 
         ``sort`` is one of ``best_match``, ``price_asc``, ``price_desc``,
         ``newly_listed``, ``ending_soonest``. ``condition`` is one of ``new``,
         ``used``, ``certified_refurbished``, ``seller_refurbished``, ``open_box``.
-        Returns the matching listings plus eBay's total match count.
+        Returns the matching listings plus eBay's total match count. Auctions
+        are excluded unless ``buy_it_now_only`` is false.
         """
 
         try:
@@ -99,6 +104,7 @@ def build_server(config: Config | None = None, client: EbayClient | None = None)
                 min_price=min_price,
                 max_price=max_price,
                 free_shipping_only=free_shipping_only,
+                buy_it_now_only=buy_it_now_only,
             )
         except (EbayError, ConfigError) as exc:
             return _error_payload(exc)
@@ -109,6 +115,7 @@ def build_server(config: Config | None = None, client: EbayClient | None = None)
         query: str,
         sample_size: int = 100,
         condition: str | None = None,
+        buy_it_now_only: bool = True,
     ) -> str:
         """Analyse the price distribution for a search.
 
@@ -122,6 +129,7 @@ def build_server(config: Config | None = None, client: EbayClient | None = None)
                 query,
                 limit=_clamp(sample_size, 1, _MAX_SAMPLE),
                 condition=condition,
+                buy_it_now_only=buy_it_now_only,
             )
         except (EbayError, ConfigError) as exc:
             return _error_payload(exc)
@@ -138,6 +146,7 @@ def build_server(config: Config | None = None, client: EbayClient | None = None)
         threshold: float = 0.20,
         limit: int = 10,
         condition: str | None = None,
+        buy_it_now_only: bool = True,
     ) -> str:
         """Find listings priced below the market median.
 
@@ -151,6 +160,7 @@ def build_server(config: Config | None = None, client: EbayClient | None = None)
                 query,
                 limit=_clamp(sample_size, 1, _MAX_SAMPLE),
                 condition=condition,
+                buy_it_now_only=buy_it_now_only,
             )
         except (EbayError, ConfigError) as exc:
             return _error_payload(exc)
@@ -164,7 +174,10 @@ def build_server(config: Config | None = None, client: EbayClient | None = None)
 
     @mcp.tool()
     async def market_research(
-        query: str, sample_size: int = 100, condition: str | None = None
+        query: str,
+        sample_size: int = 100,
+        condition: str | None = None,
+        buy_it_now_only: bool = True,
     ) -> str:
         """Produce a full market overview for a query.
 
@@ -178,6 +191,7 @@ def build_server(config: Config | None = None, client: EbayClient | None = None)
                 query,
                 limit=_clamp(sample_size, 1, _MAX_SAMPLE),
                 condition=condition,
+                buy_it_now_only=buy_it_now_only,
             )
         except (EbayError, ConfigError) as exc:
             return _error_payload(exc)

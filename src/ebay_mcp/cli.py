@@ -5,6 +5,7 @@ Subcommands:
 * ``serve``  -- run the MCP server over stdio (for a Claude/MCP host).
 * ``search`` -- run a one-off product search and print JSON (handy smoke test).
 * ``research`` -- print a market overview for a query.
+* ``item`` -- print full details (item specifics, returns) for one listing.
 * ``check`` -- verify credentials by requesting an OAuth token.
 
 ``search``, ``research``, and ``check`` exist so the eBay integration can be
@@ -48,13 +49,23 @@ def _build_parser() -> argparse.ArgumentParser:
     p_search.add_argument("--condition", default=None)
     p_search.add_argument("--min-price", type=float, default=None)
     p_search.add_argument("--max-price", type=float, default=None)
+    p_search.add_argument(
+        "--include-auctions", action="store_true", help="also return auction listings"
+    )
     p_search.set_defaults(func=_cmd_search)
 
     p_research = sub.add_parser("research", help="print a market overview for a query")
     p_research.add_argument("query", help="search keywords")
     p_research.add_argument("--sample-size", type=int, default=100)
     p_research.add_argument("--condition", default=None)
+    p_research.add_argument(
+        "--include-auctions", action="store_true", help="also return auction listings"
+    )
     p_research.set_defaults(func=_cmd_research)
+
+    p_item = sub.add_parser("item", help="print full details for one listing")
+    p_item.add_argument("item_id", help="eBay item id, e.g. v1|123456789|0")
+    p_item.set_defaults(func=_cmd_item)
 
     p_check = sub.add_parser("check", help="verify credentials by requesting a token")
     p_check.set_defaults(func=_cmd_check)
@@ -80,6 +91,7 @@ def _cmd_search(args: argparse.Namespace) -> int:
                 condition=args.condition,
                 min_price=args.min_price,
                 max_price=args.max_price,
+                buy_it_now_only=not args.include_auctions,
             )
         print(json.dumps(result.to_dict(), indent=2))
         return 0
@@ -91,11 +103,24 @@ def _cmd_research(args: argparse.Namespace) -> int:
     async def run() -> int:
         async with EbayClient(Config.load()) as client:
             result = await client.search(
-                args.query, limit=args.sample_size, condition=args.condition
+                args.query,
+                limit=args.sample_size,
+                condition=args.condition,
+                buy_it_now_only=not args.include_auctions,
             )
         report = analysis.market_research(result.items, query=args.query)
         report["total_matches"] = result.total
         print(json.dumps(report, indent=2))
+        return 0
+
+    return _run(run())
+
+
+def _cmd_item(args: argparse.Namespace) -> int:
+    async def run() -> int:
+        async with EbayClient(Config.load()) as client:
+            item = await client.get_item(args.item_id)
+        print(json.dumps(item.to_dict(), indent=2))
         return 0
 
     return _run(run())

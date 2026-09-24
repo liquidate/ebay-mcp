@@ -15,6 +15,7 @@ Usage::
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 from typing import Any
 
 import httpx
@@ -86,8 +87,18 @@ class EbayClient:
         buying_options: list[str] | None = None,
         category_ids: str | None = None,
         free_shipping_only: bool = False,
+        buy_it_now_only: bool = False,
     ) -> SearchResult:
-        """Search active listings via ``item_summary/search``."""
+        """Search active listings via ``item_summary/search``.
+
+        ``buy_it_now_only`` asks eBay for FIXED_PRICE listings and then drops any
+        that are also auctions. eBay's FIXED_PRICE filter still returns auctions
+        that carry a Buy It Now option, and that option disappears once someone
+        bids. The reported ``total`` is eBay's count before that second step.
+        """
+
+        if buy_it_now_only and not buying_options:
+            buying_options = ["FIXED_PRICE"]
 
         if not query or not query.strip():
             raise EbayError("Search query must be a non-empty string.")
@@ -116,7 +127,13 @@ class EbayClient:
             params["filter"] = filters
 
         data = await self._get("/item_summary/search", params=params)
-        return SearchResult.from_api(data)
+        result = SearchResult.from_api(data)
+        if buy_it_now_only:
+            result = dataclasses.replace(
+                result,
+                items=tuple(i for i in result.items if "AUCTION" not in i.buying_options),
+            )
+        return result
 
     async def get_item(self, item_id: str) -> Item:
         """Fetch full details for a single item by its eBay item id."""

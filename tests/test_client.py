@@ -168,3 +168,41 @@ def test_get_item(config):
         assert "/item/v1|1|0" in str(fake.requests[-1].url)
 
     asyncio.run(run())
+
+
+def test_search_buying_options_filter(config):
+    fake = FakeEbay()
+
+    async def run() -> None:
+        async with _client(config, fake) as client:
+            await client.search("optiplex", buying_options=["FIXED_PRICE"])
+        assert "buyingOptions:{FIXED_PRICE}" in _last_search_params(fake)["filter"][0]
+        async with _client(config, fake) as client:
+            await client.search("optiplex")
+        assert "filter" not in _last_search_params(fake)
+
+    asyncio.run(run())
+
+
+
+def test_buy_it_now_only_drops_auction_hybrids(config):
+    listings = [
+        {**ITEM_JSON, "itemId": "v1|1|0", "buyingOptions": ["FIXED_PRICE"]},
+        {**ITEM_JSON, "itemId": "v1|2|0", "buyingOptions": ["FIXED_PRICE", "BEST_OFFER"]},
+        {**ITEM_JSON, "itemId": "v1|3|0", "buyingOptions": ["FIXED_PRICE", "AUCTION"]},
+    ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/oauth2/token"):
+            return httpx.Response(200, json={"access_token": "tok", "expires_in": 7200})
+        return httpx.Response(200, json={"total": 3, "itemSummaries": listings})
+
+    async def run() -> None:
+        http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        async with EbayClient(config, http=http) as client:
+            bin_only = await client.search("optiplex", buy_it_now_only=True)
+            everything = await client.search("optiplex")
+        assert [i.item_id for i in bin_only.items] == ["v1|1|0", "v1|2|0"]
+        assert len(everything.items) == 3
+
+    asyncio.run(run())
